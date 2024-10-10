@@ -3,12 +3,12 @@
 #include <std_msgs/msg/bool.hpp>
 #include "md_robot_node/global.hpp"
 #include "md_robot_node/com.hpp"
-#include "md/MdRobotMsg1.hpp"
-#include "md/MdRobotMsg2.hpp"
+#include "md/msg/md_robot_msg1.hpp"
+#include "md/msg/md_robot_msg2.hpp"
 #include <queue>
 
 #define MAX_CONNECTION_CHECK_COUNT 10
-
+RobotParamDataType robotParamData;
 using namespace std::chrono_literals;
 
 class MdRobotNode : public rclcpp::Node
@@ -58,6 +58,14 @@ public:
         this->get_parameter("md_robot_node/reduction", robotParamData.nGearRatio);
         this->get_parameter("md_robot_node/wheel_radius", robotParamData.wheel_radius);
         this->get_parameter("md_robot_node/encoder_PPR", robotParamData.encoder_PPR);
+
+        // Initialize state variables
+        velCmdRcvCount = 0;
+        velCmdUpdateCount = 0;
+        fgInitsetting = INIT_SETTING_STATE_OK;
+        reset_pos_flag = false;
+        reset_alarm_flag = false;
+        remote_pc_connection_state = false;
 
         RCLCPP_INFO(this->get_logger(), "Node initialized with serial port: %s", serial_port_.c_str());
     }
@@ -124,6 +132,11 @@ private:
     bool reset_pos_flag;
     bool reset_alarm_flag;
     volatile bool remote_pc_connection_state;
+
+    // State variables
+    int velCmdRcvCount;
+    int velCmdUpdateCount;
+    int fgInitsetting;
 };
 
 int main(int argc, char **argv)

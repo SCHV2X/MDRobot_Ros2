@@ -2,8 +2,8 @@
 #include "md_robot_node/global.hpp"
 #include "md_robot_node/main.hpp"
 #include "md_robot_node/com.hpp"
-#include "md/MdRobotMsg1.hpp"
-#include "md/MdRobotMsg2.hpp"
+#include "md/msg/md_robot_msg1.hpp"
+#include "md/msg/md_robot_msg2.hpp"
 #include <serial/serial.h>
 
 #define MD_PROTOCOL_POS_PID             3
@@ -80,11 +80,3 @@ private:
     // Serial object
     serial::Serial ser_;
 };
-
-int main(int argc, char **argv)
-{
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<MdComNode>());
-    rclcpp::shutdown();
-    return 0;
-}
