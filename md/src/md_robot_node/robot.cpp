@@ -1,125 +1,95 @@
-#include <stdint.h>
+#include <rclcpp/rclcpp.hpp>
 #include "md_robot_node/global.hpp"
 #include "md_robot_node/main.hpp"
 #include "md_robot_node/com.hpp"
-#include "md/md_robot_msg1.h"
-#include "md/md_robot_msg2.h"
+#include "md/md_robot_msg1.hpp"
+#include "md/md_robot_msg2.hpp"
+#include <serial/serial.h>
 
-#define ENABLE_MD_MESSAGE          
+#define ENABLE_MD_MESSAGE
+#define VELOCITY_CONSTANT_VALUE 9.5492743
 
-#define VELOCITY_CONSTANT_VALUE         9.5492743       // linear speed(m/min), v = the length of circle of wheel x RPM
-                                                        // linear speed(m/sec), v = (2 x wheel radius x (pi / 60) x RPM)
-                                                        // 0.10472 = (2 x pi / 60)
-                                                        // V = r * w = r * (RPM * 0.10472)
-                                                        //           = r * RPM * 0.10472
-                                                        // RPM = V / r * 9.5492743
+using namespace std::chrono_literals;
 
-#define constrain(amt,low,high) ((amt)<=(low)?(low):((amt)>=(high)?(high):(amt)))
-
-#define LEFT           	  0      // Swing direction
-#define RIGHT             1
-
-extern md::md_robot_msg1 md_robot_msg_pid_pnt_main_data;
-extern md::md_robot_msg2 md_robot_msg_pid_robot_monitor;
-extern PID_ROBOT_MONITOR2_t curr_pid_robot_monitor2;
-extern PID_IO_MONITOR_t curr_pid_io_monitor;
-
-// m/sec --> RPM
-int16_t * RobotSpeedToRPMSpeed(double linear, double angular)
+class RobotCommunicationNode : public rclcpp::Node
 {
-    double wheel_radius;
-    double wheel_separation;
-    double reduction;
-    double wheel_velocity_cmd[2];
-    static int16_t goal_rpm_spped[2];
+public:
+    RobotCommunicationNode() : Node("robot_communication_node")
+    {
+        // Initialize serial communication
+        if (InitSerialComm() == -1) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to initialize serial communication.");
+            rclcpp::shutdown();
+        } else {
+            RCLCPP_INFO(this->get_logger(), "Serial communication initialized successfully.");
+        }
 
-    wheel_radius = robotParamData.wheel_radius;
-    wheel_separation = robotParamData.nWheelLength;
-    reduction = (double)robotParamData.nGearRatio;
+        // Publishers
+        md_robot_message1_pub_ = this->create_publisher<md::msg::MdRobotMsg1>("md_robot_message1", 10);
+        md_robot_message2_pub_ = this->create_publisher<md::msg::MdRobotMsg2>("md_robot_message2", 10);
 
-    // ROS_INFO("l:%f, a:%f", (double)linear, (double)angular);
-
-    wheel_velocity_cmd[LEFT]   = linear - (angular * wheel_separation / 2);
-    wheel_velocity_cmd[RIGHT]  = linear + (angular * wheel_separation / 2);
-
-    // ROS_INFO("left:%f, right:%f", (double)wheel_velocity_cmd[LEFT], (double)wheel_velocity_cmd[RIGHT]);
-
-    //***************************************************************************************
-    // Convert the linearvelocity to RPM 
-    //***************************************************************************************
-    wheel_velocity_cmd[LEFT]  = constrain(wheel_velocity_cmd[LEFT]  * VELOCITY_CONSTANT_VALUE / wheel_radius * reduction, -robotParamData.nMaxRPM, robotParamData.nMaxRPM);
-    wheel_velocity_cmd[RIGHT] = constrain(wheel_velocity_cmd[RIGHT] * VELOCITY_CONSTANT_VALUE / wheel_radius * reduction, -robotParamData.nMaxRPM, robotParamData.nMaxRPM);
-
-    // ROS_INFO("RPM1 L:%f, R:%f\r\n", (double)wheel_velocity_cmd[LEFT], (double)wheel_velocity_cmd[RIGHT]);
-
-    goal_rpm_spped[0] = (int16_t)(wheel_velocity_cmd[LEFT]);
-    goal_rpm_spped[1] = (int16_t)(wheel_velocity_cmd[RIGHT]);
-
-    return goal_rpm_spped;
-}
-
-void MakeMDRobotMessage1(PID_PNT_MAIN_DATA_t *pData)
-{
-    static bool first_cal = false;
-    static ros::Time previous_time;
-    double interval_time;
-
-    ros::Time curr_time = ros::Time::now();
-
-    interval_time = curr_time.toSec() - previous_time.toSec();
-    previous_time = curr_time;
-
-    md_robot_msg_pid_pnt_main_data.interval_time = interval_time;
-    md_robot_msg_pid_pnt_main_data.motor1_pos = pData->mtr_pos_id1;
-    md_robot_msg_pid_pnt_main_data.motor2_pos = pData->mtr_pos_id2;
-    md_robot_msg_pid_pnt_main_data.motor1_rpm = pData->rpm_id1;
-    md_robot_msg_pid_pnt_main_data.motor2_rpm = pData->rpm_id2;
-
-    md_robot_msg_pid_pnt_main_data.motor1_state = pData->mtr_state_id1.val;
-    md_robot_msg_pid_pnt_main_data.motor2_state = pData->mtr_state_id2.val;
-
-    md_robot_msg_pid_pnt_main_data.input_voltage = (float)(curr_pid_io_monitor.input_voltage / 10.0);
-
-#ifdef ENABLE_MD_MESSAGE
-    ROS_INFO("interval time1: %f, pos1: %d, pos2: %d, rpm1: %d rpm2: %d, input voltage: %f\r\n",\
-                interval_time, md_robot_msg_pid_pnt_main_data.motor1_pos, md_robot_msg_pid_pnt_main_data.motor2_pos, md_robot_msg_pid_pnt_main_data.motor1_rpm, md_robot_msg_pid_pnt_main_data.motor2_rpm, md_robot_msg_pid_pnt_main_data.input_voltage);
-#endif
-}
-
-// MDUI
-void MakeMDRobotMessage2(PID_ROBOT_MONITOR_t *pData)
-{
-    static bool first_cal = false;
-    static ros::Time previous_time;
-    double interval_time;
-
-    ros::Time curr_time = ros::Time::now();
-
-    interval_time = curr_time.toSec() - previous_time.toSec();
-    previous_time = curr_time;
-
-    md_robot_msg_pid_robot_monitor.interval_time = interval_time;
-    md_robot_msg_pid_robot_monitor.x_pos = pData->lTempPosi_x;
-    md_robot_msg_pid_robot_monitor.y_pos = pData->lTempPosi_y;
-    md_robot_msg_pid_robot_monitor.angule = pData->sTempTheta;
-
-    if(robotParamData.reverse_direction == 0) {
-        md_robot_msg_pid_robot_monitor.US_1 = pData->byUS1;
-        md_robot_msg_pid_robot_monitor.US_2 = pData->byUS2;
-    }
-    else {
-        md_robot_msg_pid_robot_monitor.US_1 = pData->byUS2;
-        md_robot_msg_pid_robot_monitor.US_2 = pData->byUS1;
+        // Timer for serial data receiving
+        serial_receive_timer_ = this->create_wall_timer(10ms, std::bind(&RobotCommunicationNode::ReceiveSerialData, this));
     }
 
-    md_robot_msg_pid_robot_monitor.platform_state = pData->byPlatStatus.val;
-    md_robot_msg_pid_robot_monitor.linear_velocity = pData->linear_velocity;
-    md_robot_msg_pid_robot_monitor.angular_velocity = pData->angular_velocity;
-    md_robot_msg_pid_robot_monitor.input_voltage = (float)(curr_pid_robot_monitor2.sVoltIn / 10.0);
+private:
+    int InitSerialComm()
+    {
+        std::string port;
+        this->get_parameter_or("md_robot_node/serial_port", port, std::string("/dev/ttyUSB0"));
+        int baudrate;
+        this->get_parameter_or("md_robot_node/serial_baudrate", baudrate, 115200);
 
-#ifdef ENABLE_MD_MESSAGE
-    ROS_INFO("interval time2: %f, input_voltage: %f\r\n", interval_time, md_robot_msg_pid_robot_monitor.input_voltage);
-#endif    
+        try {
+            ser_.setPort(port);
+            ser_.setBaudrate(baudrate);
+            serial::Timeout to = serial::Timeout::simpleTimeout(1000);
+            ser_.setTimeout(to);
+            ser_.open();
+        } catch (serial::IOException &e) {
+            RCLCPP_ERROR(this->get_logger(), "Unable to open port: %s", port.c_str());
+            return -1;
+        }
+
+        if (ser_.isOpen()) {
+            RCLCPP_INFO(this->get_logger(), "Serial port open: %s", port.c_str());
+            return 1;
+        } else {
+            return -1;
+        }
+    }
+
+    void ReceiveSerialData()
+    {
+        if (ser_.available()) {
+            uint8_t buffer[256];
+            size_t bytes_read = ser_.read(buffer, sizeof(buffer));
+            AnalyzeReceivedData(buffer, bytes_read);
+        }
+    }
+
+    void AnalyzeReceivedData(uint8_t *data, size_t length)
+    {
+        // Implementation of analyzing data and publishing relevant messages
+        // For example:
+        RCLCPP_INFO(this->get_logger(), "Received data of length: %zu", length);
+    }
+
+    // Publishers
+    rclcpp::Publisher<md::msg::MdRobotMsg1>::SharedPtr md_robot_message1_pub_;
+    rclcpp::Publisher<md::msg::MdRobotMsg2>::SharedPtr md_robot_message2_pub_;
+
+    // Timer for receiving serial data
+    rclcpp::TimerBase::SharedPtr serial_receive_timer_;
+
+    // Serial object
+    serial::Serial ser_;
+};
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<RobotCommunicationNode>());
+    rclcpp::shutdown();
+    return 0;
 }
-
-/////////// the end of file
