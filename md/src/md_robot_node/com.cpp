@@ -2,8 +2,8 @@
 #include "md_robot_node/global.hpp"
 #include "md_robot_node/main.hpp"
 #include "md_robot_node/com.hpp"
-#include "md/md_robot_msg1.hpp"
-#include "md/md_robot_msg2.hpp"
+#include "md/MdRobotMsg1.hpp"
+#include "md/MdRobotMsg2.hpp"
 #include <serial/serial.h>
 
 #define MD_PROTOCOL_POS_PID             3

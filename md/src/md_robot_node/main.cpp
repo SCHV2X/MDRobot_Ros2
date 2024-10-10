@@ -3,8 +3,8 @@
 #include <std_msgs/msg/bool.hpp>
 #include "md_robot_node/global.hpp"
 #include "md_robot_node/com.hpp"
-#include "md/md_robot_msg1.hpp"
-#include "md/md_robot_msg2.hpp"
+#include "md/MdRobotMsg1.hpp"
+#include "md/MdRobotMsg2.hpp"
 #include <queue>
 
 #define MAX_CONNECTION_CHECK_COUNT 10

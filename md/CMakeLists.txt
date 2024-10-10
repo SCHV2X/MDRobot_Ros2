@@ -20,8 +20,8 @@ find_package(serial REQUIRED)
 # Generate messages in the 'msg' folder
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/md_robot_msg1.msg"
-  "msg/md_robot_msg2.msg"
+  "msg/MdRobotMsg1.msg"
+  "msg/MdRobotMsg2.msg"
   DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
 
