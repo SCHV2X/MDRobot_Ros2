@@ -16,9 +16,9 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(serial REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # Generate messages in the 'msg' folder
-find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MdRobotMsg1.msg"
   "msg/MdRobotMsg2.msg"
